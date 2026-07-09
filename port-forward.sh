@@ -48,7 +48,7 @@ add_rule() {
 
     iptables -t nat -C POSTROUTING -j MASQUERADE 2>/dev/null || \
         iptables -t nat -A POSTROUTING -j MASQUERADE
-
+    save_rule
     echo
     echo "转发成功："
     echo "$PROTO  $LPORT  --->  $DIP:$DPORT"
@@ -82,7 +82,7 @@ delete_rule() {
     read -p "删除FORWARD规则编号(0跳过): " NUM2
 
     [[ "$NUM2" != "0" ]] && iptables -D FORWARD $NUM2
-
+    save_rule
     echo "删除完成"
 }
 
@@ -113,7 +113,6 @@ do
     echo "1. 添加端口转发"
     echo "2. 查看规则"
     echo "3. 删除规则"
-    echo "4. 保存规则"
     echo "0. 退出"
     echo
 
@@ -123,7 +122,6 @@ do
         1) add_rule ;;
         2) list_rule ;;
         3) delete_rule ;;
-        4) save_rule ;;
         0) exit ;;
         *) echo "输入错误" ;;
     esac
