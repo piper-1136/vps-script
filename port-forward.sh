@@ -71,38 +71,22 @@ add_forward(){
     read -p "目标IP: " DST_IP
     read -p "目标端口: " DST_PORT
 
-    echo "协议:"
-    echo "1) TCP"
-    echo "2) UDP"
-    read -p "选择: " PROTO_NUM
+
+    for PROTO in tcp udp
+    do
+        iptables -t nat -A PREROUTING \
+            -p $PROTO \
+            --dport $SRC_PORT \
+            -j DNAT \
+            --to-destination $DST_IP:$DST_PORT
 
 
-    case $PROTO_NUM in
-        1)
-            PROTO=tcp
-            ;;
-        2)
-            PROTO=udp
-            ;;
-        *)
-            echo "错误"
-            return
-            ;;
-    esac
-
-
-    iptables -t nat -A PREROUTING \
-        -p $PROTO \
-        --dport $SRC_PORT \
-        -j DNAT \
-        --to-destination $DST_IP:$DST_PORT
-
-
-    iptables -A FORWARD \
-        -p $PROTO \
-        -d $DST_IP \
-        --dport $DST_PORT \
-        -j ACCEPT
+        iptables -A FORWARD \
+            -p $PROTO \
+            -d $DST_IP \
+            --dport $DST_PORT \
+            -j ACCEPT
+    done
 
 
     echo 1 > /proc/sys/net/ipv4/ip_forward
@@ -110,7 +94,7 @@ add_forward(){
 
     save_rules
 
-    echo "添加成功"
+    echo "添加成功(TCP+UDP)"
 }
 
 
