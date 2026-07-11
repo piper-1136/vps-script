@@ -1,128 +1,223 @@
 #!/bin/bash
 
-set -e
+RULE_FILE="/etc/iptables_port_forward.rules"
 
-if [[ $EUID -ne 0 ]]; then
-    echo "请使用 root 运行"
+# 检查root
+if [ "$EUID" -ne 0 ]; then
+    echo "请使用root运行"
     exit 1
 fi
 
-enable_forward() {
-    sysctl -w net.ipv4.ip_forward=1 >/dev/null
+# 安装iptables
+install_iptables() {
+    if ! command -v iptables >/dev/null 2>&1; then
+        echo "iptables不存在，正在安装..."
 
-    if ! grep -q "^net.ipv4.ip_forward=1" /etc/sysctl.conf; then
-        echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+        if command -v apt >/dev/null 2>&1; then
+            apt update
+            apt install -y iptables iptables-persistent
+
+        elif command -v yum >/dev/null 2>&1; then
+            yum install -y iptables-services
+
+        else
+            echo "无法自动安装iptables"
+            exit 1
+        fi
     fi
 }
 
-add_rule() {
+# 保存规则
+save_rules() {
+    echo "保存iptables规则..."
+
+    if command -v netfilter-persistent >/dev/null 2>&1; then
+        netfilter-persistent save
+    else
+        iptables-save > "$RULE_FILE"
+    fi
+
+    echo "保存完成"
+}
+
+
+# 加载保存规则
+load_rules() {
+    if [ -f "$RULE_FILE" ]; then
+        iptables-restore < "$RULE_FILE"
+    fi
+}
+
+
+# 显示转发规则
+show_rules() {
 
     echo
-    read -p "监听端口: " LPORT
-    read -p "目标IP: " DIP
-    read -p "目标端口: " DPORT
-    read -p "协议(tcp/udp/all)[tcp]: " PROTO
+    echo "====== 当前端口转发 ======"
 
-    PROTO=${PROTO:-tcp}
+    iptables -t nat -L PREROUTING \
+        --line-numbers \
+        -n \
+        | grep DNAT
 
-    enable_forward
+    echo
+}
 
-    case "$PROTO" in
-        tcp)
-            iptables -t nat -A PREROUTING -p tcp --dport $LPORT -j DNAT --to-destination ${DIP}:${DPORT}
-            iptables -A FORWARD -p tcp -d $DIP --dport $DPORT -j ACCEPT
+
+# 添加转发
+add_forward(){
+
+    read -p "外部监听端口: " SRC_PORT
+    read -p "目标IP: " DST_IP
+    read -p "目标端口: " DST_PORT
+
+    echo "协议:"
+    echo "1) TCP"
+    echo "2) UDP"
+    read -p "选择: " PROTO_NUM
+
+
+    case $PROTO_NUM in
+        1)
+            PROTO=tcp
             ;;
-        udp)
-            iptables -t nat -A PREROUTING -p udp --dport $LPORT -j DNAT --to-destination ${DIP}:${DPORT}
-            iptables -A FORWARD -p udp -d $DIP --dport $DPORT -j ACCEPT
-            ;;
-        all)
-            iptables -t nat -A PREROUTING --dport $LPORT -j DNAT --to-destination ${DIP}:${DPORT}
-            iptables -A FORWARD -d $DIP --dport $DPORT -j ACCEPT
+        2)
+            PROTO=udp
             ;;
         *)
-            echo "协议错误"
+            echo "错误"
             return
             ;;
     esac
 
-    iptables -t nat -C POSTROUTING -j MASQUERADE 2>/dev/null || \
-        iptables -t nat -A POSTROUTING -j MASQUERADE
-    save_rule
-    echo
-    echo "转发成功："
-    echo "$PROTO  $LPORT  --->  $DIP:$DPORT"
+
+    iptables -t nat -A PREROUTING \
+        -p $PROTO \
+        --dport $SRC_PORT \
+        -j DNAT \
+        --to-destination $DST_IP:$DST_PORT
+
+
+    iptables -A FORWARD \
+        -p $PROTO \
+        -d $DST_IP \
+        --dport $DST_PORT \
+        -j ACCEPT
+
+
+    echo 1 > /proc/sys/net/ipv4/ip_forward
+
+
+    save_rules
+
+    echo "添加成功"
 }
 
-list_rule() {
-    echo
-    echo "========== NAT =========="
-    iptables -t nat -L -n --line-numbers
 
-    echo
-    echo "========== FORWARD =========="
-    iptables -L FORWARD -n --line-numbers
-}
+# 删除规则
+delete_forward(){
 
-delete_rule() {
+    mapfile -t RULES < <(
+        iptables -t nat -L PREROUTING \
+        --line-numbers \
+        -n | grep DNAT
+    )
 
-    echo
-    echo "NAT规则："
-    iptables -t nat -L PREROUTING -n --line-numbers
 
-    read -p "删除PREROUTING规则编号(0取消): " NUM
+    if [ ${#RULES[@]} -eq 0 ]; then
+        echo "没有转发规则"
+        return
+    fi
 
-    [[ "$NUM" == "0" ]] && return
 
-    iptables -t nat -D PREROUTING $NUM
+    echo "====== 删除列表 ======"
 
-    echo "Forward规则："
-    iptables -L FORWARD -n --line-numbers
+    for i in "${!RULES[@]}"; do
+        echo "$((i+1))) ${RULES[$i]}"
+    done
 
-    read -p "删除FORWARD规则编号(0跳过): " NUM2
 
-    [[ "$NUM2" != "0" ]] && iptables -D FORWARD $NUM2
-    save_rule
+    read -p "输入删除编号: " NUM
+
+
+    if ! [[ "$NUM" =~ ^[0-9]+$ ]]; then
+        echo "输入错误"
+        return
+    fi
+
+
+    REAL_LINE=$(echo "${RULES[$((NUM-1))]}" | awk '{print $1}')
+
+
+    if [ -z "$REAL_LINE" ]; then
+        echo "不存在"
+        return
+    fi
+
+
+    iptables -t nat -D PREROUTING $REAL_LINE
+
+
+    save_rules
+
     echo "删除完成"
 }
 
-save_rule() {
 
-    if command -v netfilter-persistent >/dev/null; then
-        netfilter-persistent save
-        echo "已保存"
-        return
-    fi
 
-    if command -v iptables-save >/dev/null; then
-        mkdir -p /etc/iptables
-        iptables-save >/etc/iptables/rules.v4
-        echo "保存到 /etc/iptables/rules.v4"
-        return
-    fi
-
-    echo "未找到保存工具"
-}
+menu(){
 
 while true
 do
-    echo
-    echo "=============================="
-    echo "iptables端口转发"
-    echo "=============================="
-    echo "1. 添加端口转发"
-    echo "2. 查看规则"
-    echo "3. 删除规则"
-    echo "0. 退出"
-    echo
 
-    read -p "请选择: " CH
+echo
+echo "======================"
+echo "  iptables端口转发"
+echo "======================"
+echo "1. 添加端口转发"
+echo "2. 查看转发规则"
+echo "3. 删除端口转发"
+echo "4. 退出"
+echo
 
-    case "$CH" in
-        1) add_rule ;;
-        2) list_rule ;;
-        3) delete_rule ;;
-        0) exit ;;
-        *) echo "输入错误" ;;
-    esac
+read -p "选择: " CHOICE
+
+
+case $CHOICE in
+
+1)
+    add_forward
+    ;;
+
+2)
+    show_rules
+    ;;
+
+3)
+    delete_forward
+    ;;
+
+4)
+    exit
+    ;;
+
+*)
+    echo "错误选择"
+    ;;
+
+esac
+
 done
+
+}
+
+
+
+install_iptables
+
+# 开启转发
+sysctl -w net.ipv4.ip_forward=1 >/dev/null
+
+load_rules
+
+menu
