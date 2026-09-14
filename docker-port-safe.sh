@@ -1,118 +1,100 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 set -e
 
-FILES=()
+find . -type f \( -name "docker-compose.yml" -o -name "docker-compose.yaml" -o -name "compose.yml" -o -name "compose.yaml" \) -print0 |
+while IFS= read -r -d '' file; do
+    echo "处理: $file"
 
-[ -f "docker-compose.yml" ] && FILES+=("docker-compose.yml")
-[ -f "docker-compose.yaml" ] && FILES+=("docker-compose.yaml")
+    cp "$file" "$file.bak"
 
-if [ ${#FILES[@]} -eq 0 ]; then
-    echo "❌ 当前目录没有找到 docker-compose.yml 或 docker-compose.yaml"
-    exit 1
-fi
-
-for FILE in "${FILES[@]}"; do
-    echo "🔧 处理: $FILE"
-
-    # 自动备份
-    cp "$FILE" "$FILE.bak"
-
-    python3 - "$FILE" <<'PY'
-import re
+    python3 - "$file" <<'PY'
 import sys
+import re
 
 file = sys.argv[1]
 
 with open(file, "r", encoding="utf-8") as f:
-    content = f.read()
+    text = f.read()
 
-def replace_port(match):
-    prefix = match.group(1)
-    port = match.group(2)
-
-    # 已经绑定 127.0.0.1，不处理
-    if prefix == "127.0.0.1:":
-        return match.group(0)
-
-    return f"{match.group(0)[:match.group(0).find(port)]}" + port
-
-# 处理:
-#   - "8080:8080"
-#   - '8080:8080'
-#   - - 8080:8080
+# 修改 ports: 下的短格式：
 #
-# 只处理 ports 区域中的常见短格式
-lines = content.splitlines()
+#   - "8080:80"
+#   - 8080:80
+#   - "8080:80/tcp"
+#
+# 为：
+#
+#   - "127.0.0.1:8080:80"
+#   - "127.0.0.1:8080:80/tcp"
+
+pattern = re.compile(
+    r'(^[ \t]*-[ \t]*["\']?)'
+    r'(?P<host>\d+)'
+    r':'
+    r'(?P<container>\d+)'
+    r'(?P<protocol>/[a-zA-Z0-9]+)?'
+    r'(["\']?[ \t]*$)',
+    re.MULTILINE
+)
+
+lines = text.splitlines(keepends=True)
 
 in_ports = False
 ports_indent = None
+changed = False
 
 for i, line in enumerate(lines):
-    stripped = line.lstrip()
-    indent = len(line) - len(stripped)
-
-    # ports:
-    if re.match(r'^ports\s*:\s*$', stripped):
+    # 判断 ports:
+    m = re.match(r'^(\s*)ports\s*:\s*$', line)
+    if m:
         in_ports = True
-        ports_indent = indent
+        ports_indent = len(m.group(1).replace('\t', '    '))
         continue
 
-    # 离开 ports 块
     if in_ports:
-        if stripped and indent <= ports_indent:
-            in_ports = False
-            ports_indent = None
+        # 遇到同级/更高一级的配置项，退出 ports
+        stripped = line.lstrip()
 
-    if not in_ports:
-        continue
+        if stripped and not stripped.startswith("-"):
+            indent = len(line) - len(stripped)
+            indent = len(line[:len(line)-len(stripped)].replace('\t', '    '))
 
-    # 匹配:
-    # - "8080:8080"
-    # - '8080:8080'
-    # - 8080:8080
-    m = re.match(
-        r'^(\s*-\s*)(["\']?)([^"\':\s]+):([^"\':\s]+)(["\']?)\s*$',
-        line
-    )
+            if indent <= ports_indent:
+                in_ports = False
+                ports_indent = None
+                continue
 
-    if not m:
-        continue
+        # 只处理 ports 列表
+        if in_ports:
+            m = pattern.match(line)
 
-    prefix, quote1, host, container, quote2 = m.groups()
+            if m:
+                host = m.group("host")
+                container = m.group("container")
+                protocol = m.group("protocol") or ""
 
-    # 已经指定 IP，例如:
-    # 127.0.0.1:8080:8080
-    # 0.0.0.0:8080:8080
-    if host.count(".") == 3:
-        continue
+                newline = (
+                    m.group(1)
+                    + f"127.0.0.1:{host}:{container}"
+                    + protocol
+                    + m.group(5)
+                )
 
-    # IPv6 或其他复杂写法暂不处理
-    if ":" in host:
-        continue
-
-    # 修改成 127.0.0.1:HOST:CONTAINER
-    lines[i] = (
-        f'{prefix}{quote1}'
-        f'127.0.0.1:{host}:{container}'
-        f'{quote2}'
-    )
-
-new_content = "\n".join(lines)
-
-if content.endswith("\n"):
-    new_content += "\n"
+                if newline != line:
+                    lines[i] = newline
+                    changed = True
 
 with open(file, "w", encoding="utf-8") as f:
-    f.write(new_content)
+    f.write("".join(lines))
 
+if changed:
+    print("  ✓ 已修改")
+else:
+    print("  - 无需修改")
 PY
 
-    echo "✅ 完成: $FILE"
-    echo "   备份: $FILE.bak"
 done
 
 echo
-echo "完成。可以使用以下命令检查："
-echo
-echo "docker compose config"
+echo "完成。原文件已备份为 *.bak"
