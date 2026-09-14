@@ -10,6 +10,11 @@
 bash <(curl -fsSL https://raw.githubusercontent.com/piper-1136/vps-script/main/menu.sh)
 ```
 
+代理版本
+```bash
+bash <(curl -fsSL https://o-o.men/https://raw.githubusercontent.com/piper-1136/vps-script/main/menu.sh)
+```
+
 运行后会看到编号菜单，输入数字选择要执行的脚本，确认后自动下载并运行。
 
 ## 脚本列表
