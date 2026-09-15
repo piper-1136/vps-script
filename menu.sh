@@ -150,40 +150,27 @@ run_script() {
     echo
     echo -e "${BLUE}下载地址：${RESET}$url"
     echo
+    echo -e "${GREEN}开始执行...${RESET}"
+    echo
 
-    local confirm
-    read_input "确认执行？[y/N] " confirm
+    local tmpfile
+    tmpfile=$(mktemp)
 
-    case "$confirm" in
-        y|Y)
+    if curl -fsSL --connect-timeout 10 "$url" -o "$tmpfile"; then
+        chmod +x "$tmpfile"
+        bash "$tmpfile" < "$TTY_IN"
+        local ret=$?
+        if [ $ret -eq 0 ]; then
             echo
-            echo -e "${GREEN}开始执行...${RESET}"
+            echo -e "${GREEN}✓ 执行完成${RESET}"
+        else
             echo
-
-            local tmpfile
-            tmpfile=$(mktemp)
-
-            if curl -fsSL --connect-timeout 10 "$url" -o "$tmpfile"; then
-                chmod +x "$tmpfile"
-                bash "$tmpfile" < "$TTY_IN"
-                local ret=$?
-                if [ $ret -eq 0 ]; then
-                    echo
-                    echo -e "${GREEN}✓ 执行完成${RESET}"
-                else
-                    echo
-                    echo -e "${RED}✗ 脚本执行出错（退出码: $ret）${RESET}"
-                fi
-            else
-                echo -e "${RED}✗ 下载失败，请检查网络或脚本路径${RESET}"
-            fi
-            rm -f "$tmpfile"
-            ;;
-        *)
-            echo
-            echo "已取消"
-            ;;
-    esac
+            echo -e "${RED}✗ 脚本执行出错（退出码: $ret）${RESET}"
+        fi
+    else
+        echo -e "${RED}✗ 下载失败，请检查网络或脚本路径${RESET}"
+    fi
+    rm -f "$tmpfile"
 
     echo
     read_input "按 Enter 返回菜单..." _dummy
