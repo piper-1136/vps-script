@@ -21,20 +21,9 @@ bash <(curl -fsSL https://o-o.men/https://raw.githubusercontent.com/piper-1136/v
 
 | 脚本 | 说明 |
 | --- | --- |
-| `docker-port-safe.sh` | Docker 端口安全相关处理 |
-| `port-forward.sh` | 端口转发配置 |
+| `docker-bash.sh` | 按关键字匹配运行中的 Docker 容器并进入其终端（自动检测 bash / sh） |
+| `docker-port-safe.sh` | 将 docker-compose 中的端口绑定改为 `127.0.0.1`，避免向公网暴露（自动备份为 `*.bak`） |
+| `port-forward.sh` | iptables 端口转发管理：添加 / 查看 / 删除转发规则（TCP+UDP，需 root） |
 | `menu.sh` | 入口菜单脚本，扫描并列出仓库内所有 `.sh` 脚本 |
 
 > 新增脚本到仓库根目录后，菜单会自动识别，无需修改 `menu.sh`。
-
-## 依赖
-
-- `bash`
-- `curl`
-- `jq`（可选，未安装时自动降级为正则解析）
-
-## 注意事项
-
-- 脚本通过 `curl | bash` 方式执行远程代码，运行前请确认来源可信。
-- 未认证的 GitHub API 请求存在速率限制（每 IP 每小时 60 次），高频调用可能失败。
-- 部分脚本可能需要 root 权限，请按需使用 `sudo`。
