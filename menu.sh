@@ -108,13 +108,8 @@ get_desc() {
 show_menu() {
     clear_screen
     echo
-    echo -e "${CYAN}${BOLD}╔══════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}${BOLD}║          VPS Script Manager                   ║${RESET}"
-    echo -e "${CYAN}${BOLD}╚══════════════════════════════════════════════╝${RESET}"
+    echo -e "${CYAN}${BOLD}VPS Script Manager${RESET}  ${BLUE}${REPO}@${BRANCH}${RESET}"
     echo
-    echo -e "仓库：${BLUE}${REPO}${RESET}   分支：${BLUE}${BRANCH}${RESET}"
-    echo
-    echo -e "${YELLOW}正在扫描 GitHub...${RESET}"
 
     if ! get_scripts; then
         echo
@@ -122,19 +117,12 @@ show_menu() {
         exit 1
     fi
 
-    echo
-    echo -e "${GREEN}找到 ${#SCRIPTS[@]} 个脚本${RESET}"
-    echo
-
     local i=1
     for script in "${SCRIPTS[@]}"; do
         printf " ${CYAN}%2d${RESET}) %s\n" "$i" "$(get_desc "$script")"
         i=$((i + 1))
     done
 
-    echo
-    echo -e " ${YELLOW}r${RESET}) 刷新"
-    echo -e " ${RED}0${RESET}) 退出"
     echo
 }
 
@@ -144,13 +132,7 @@ run_script() {
     local url="${RAW_URL}/${script}"
 
     echo
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-    echo -e "${BOLD}脚本：${RESET}${GREEN}${script}${RESET}"
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-    echo
-    echo -e "${BLUE}下载地址：${RESET}$url"
-    echo
-    echo -e "${GREEN}开始执行...${RESET}"
+    echo -e "${CYAN}执行 ${script}${RESET}"
     echo
 
     local tmpfile
@@ -162,18 +144,18 @@ run_script() {
         local ret=$?
         if [ $ret -eq 0 ]; then
             echo
-            echo -e "${GREEN}✓ 执行完成${RESET}"
+            echo -e "${GREEN}✓ 完成${RESET}"
         else
             echo
-            echo -e "${RED}✗ 脚本执行出错（退出码: $ret）${RESET}"
+            echo -e "${RED}✗ 出错（退出码: $ret）${RESET}"
         fi
     else
-        echo -e "${RED}✗ 下载失败，请检查网络或脚本路径${RESET}"
+        echo -e "${RED}✗ 下载失败${RESET}"
     fi
     rm -f "$tmpfile"
 
     echo
-    read_input "按 Enter 返回菜单..." _dummy
+    read_input "按 Enter 返回..." _dummy
 }
 
 # ============================================================
@@ -185,12 +167,12 @@ while true; do
     show_menu
 
     choice=""
-    read_input "请选择： " choice
+    read_input "选择: " choice
 
     case "$choice" in
         0)
             echo
-            echo "退出。"
+            echo "退出"
             exit 0
             ;;
         r|R|"")
