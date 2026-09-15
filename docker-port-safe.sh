@@ -2,10 +2,6 @@
 
 set -e
 
-total_files=0
-changed_files=0
-total_ports=0
-
 find . -type f \( \
     -name "docker-compose.yml" -o \
     -name "docker-compose.yaml" -o \
@@ -13,8 +9,6 @@ find . -type f \( \
     -name "compose.yaml" \
 \) -print0 |
 while IFS= read -r -d '' file; do
-
-    ((total_files+=1))
 
     # 备份
     cp "$file" "$file.bak"

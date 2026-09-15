@@ -2,6 +2,11 @@
 
 set -u
 
+if ! command -v docker >/dev/null 2>&1; then
+    echo "未找到 docker 命令，请先安装 Docker"
+    exit 1
+fi
+
 KEYWORD="${1:-}"
 
 if [[ -z "$KEYWORD" ]]; then

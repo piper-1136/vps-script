@@ -71,6 +71,18 @@ add_forward(){
     read -p "目标IP: " DST_IP
     read -p "目标端口: " DST_PORT
 
+    case "$SRC_PORT" in
+        ''|*[!0-9]*) echo "外部端口无效"; return;;
+    esac
+
+    case "$DST_PORT" in
+        ''|*[!0-9]*) echo "目标端口无效"; return;;
+    esac
+
+    case "$DST_IP" in
+        ''|*[!0-9.]*) echo "目标IP无效"; return;;
+    esac
+
 
     for PROTO in tcp udp
     do

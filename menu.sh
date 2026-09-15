@@ -38,7 +38,7 @@ read_input() {
     local __resultvar="$2"
     local _val
     read -rp "$prompt" _val < "$TTY_IN"
-    eval "$__resultvar=\"\$_val\""
+    printf -v "$__resultvar" '%s' "$_val"
 }
 
 clear_screen() {
@@ -133,6 +133,7 @@ run_script() {
 
     local tmpfile
     tmpfile=$(mktemp)
+    trap 'rm -f "$tmpfile"' EXIT
 
     if curl -fsSL --connect-timeout 10 "$url" -o "$tmpfile"; then
         chmod +x "$tmpfile"
@@ -148,7 +149,6 @@ run_script() {
     else
         echo -e "${RED}✗ 下载失败${RESET}"
     fi
-    rm -f "$tmpfile"
 
     echo
     exit 0
@@ -171,7 +171,7 @@ while true; do
             echo "退出"
             exit 0
             ;;
-        r|R|"")
+        r|"")
             continue
             ;;
         *[!0-9]*)
