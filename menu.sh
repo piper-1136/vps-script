@@ -155,7 +155,7 @@ run_script() {
     rm -f "$tmpfile"
 
     echo
-    read_input "按 Enter 返回..." _dummy
+    exit 0
 }
 
 # ============================================================
