@@ -138,14 +138,6 @@ run_script() {
     if curl -fsSL --connect-timeout 10 "$url" -o "$tmpfile"; then
         chmod +x "$tmpfile"
         bash "$tmpfile" < "$TTY_IN"
-        local ret=$?
-        if [ $ret -eq 0 ]; then
-            echo
-            echo -e "${GREEN}✓ 完成${RESET}"
-        else
-            echo
-            echo -e "${RED}✗ 出错（退出码: $ret）${RESET}"
-        fi
     else
         echo -e "${RED}✗ 下载失败${RESET}"
     fi
