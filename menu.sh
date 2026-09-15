@@ -131,10 +131,6 @@ run_script() {
     local script="${SCRIPTS[$((index - 1))]}"
     local url="${RAW_URL}/${script}"
 
-    echo
-    echo -e "${CYAN}执行 ${script}${RESET}"
-    echo
-
     local tmpfile
     tmpfile=$(mktemp)
 
