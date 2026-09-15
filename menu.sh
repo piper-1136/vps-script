@@ -94,6 +94,17 @@ get_scripts() {
     return 0
 }
 
+# 脚本文件对应的简短中文描述
+get_desc() {
+    local name="$1"
+    case "$name" in
+        docker-bash.sh)      echo "进入 Docker 容器终端";;
+        docker-port-safe.sh) echo "Docker 端口安全处理";;
+        port-forward.sh)     echo "iptables 端口转发";;
+        *)                   echo "$name";;
+    esac
+}
+
 show_menu() {
     clear_screen
     echo
@@ -117,7 +128,7 @@ show_menu() {
 
     local i=1
     for script in "${SCRIPTS[@]}"; do
-        printf " ${CYAN}%2d${RESET}) %s\n" "$i" "$script"
+        printf " ${CYAN}%2d${RESET}) %s\n" "$i" "$(get_desc "$script")"
         i=$((i + 1))
     done
 
