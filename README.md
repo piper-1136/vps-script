@@ -21,6 +21,7 @@ bash <(curl -fsSL https://o-o.men/https://raw.githubusercontent.com/piper-1136/v
 
 | 脚本 | 说明 |
 | --- | --- |
+| `add-swap.sh` | 创建 Swap 虚拟内存（可指定大小，自动写入 fstab 持久化） |
 | `docker-bash.sh` | 按关键字匹配运行中的 Docker 容器并进入其终端（自动检测 bash / sh） |
 | `docker-port-safe.sh` | 将 docker-compose 中的端口绑定改为 `127.0.0.1`，避免向公网暴露（自动备份为 `*.bak`） |
 | `port-forward.sh` | iptables 端口转发管理：添加 / 查看 / 删除转发规则（TCP+UDP，需 root） |

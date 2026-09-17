@@ -98,6 +98,7 @@ get_scripts() {
 get_desc() {
     local name="$1"
     case "$name" in
+        add-swap.sh)         echo "创建虚拟内存(Swap)";;
         docker-bash.sh)      echo "进入 Docker 容器终端";;
         docker-port-safe.sh) echo "Docker 端口安全处理";;
         port-forward.sh)     echo "iptables 端口转发";;
