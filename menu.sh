@@ -99,6 +99,7 @@ get_desc() {
     local name="$1"
     case "$name" in
         add-swap.sh)         echo "创建虚拟内存(Swap)";;
+        bbr.sh)              echo "启用 TCP BBR 加速";;
         docker-bash.sh)      echo "进入 Docker 容器终端";;
         docker-port-safe.sh) echo "Docker 端口安全处理";;
         ip-blacklist.sh)     echo "IP 黑名单管理";;
@@ -110,7 +111,7 @@ get_desc() {
 show_menu() {
     clear_screen
     echo
-    echo -e "${CYAN}${BOLD}VPS Script Manager${RESET}  ${BLUE}${REPO}@${BRANCH}${RESET}"
+    echo -e "${CYAN}${BOLD}VPS 运维菜单${RESET}  ${BLUE}${REPO}@${BRANCH}${RESET}"
     echo
 
     if ! get_scripts; then
