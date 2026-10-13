@@ -101,6 +101,7 @@ get_desc() {
         add-swap.sh)         echo "创建虚拟内存(Swap)";;
         docker-bash.sh)      echo "进入 Docker 容器终端";;
         docker-port-safe.sh) echo "Docker 端口安全处理";;
+        ip-blacklist.sh)     echo "IP 黑名单管理";;
         port-forward.sh)     echo "iptables 端口转发";;
         *)                   echo "$name";;
     esac
