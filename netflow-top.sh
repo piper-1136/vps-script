@@ -18,7 +18,7 @@ CACHE_DIR="/tmp/geoip_cache"
 PROC_NAME="xray"
 TOP=20               # 显示连接数最多的前N个IP
 SAMPLESEC=5          # iftop 采样秒数
-MIN_KB=10            # 流量阈值(KB), 低于此值的IP不显示
+MIN_KB=1            # 流量阈值(KB), 低于此值的IP不显示
 WITH_TRAFFIC=1       # 默认结合流量过滤; -a(所有) 时关闭
 LOCAL_IPS=""
 
@@ -140,24 +140,26 @@ get_pid_connections() {
 }
 
 # ---------- iftop 采样, 得到有流量的IP (KB) ----------
-# 返回每行: peerIp|速率KB/s|累计MB
+# 返回每行: peerIp|速率KB/s|累计KB
 # iftop -B 以字节显示; -t 文本模式
-# host行格式: "对端IP            => 总发送 总接收  last2s发送 last2s接收"
-# 对端IP出现在 "=>" 行的第1列 (常见 iftop 版本)
+# 真实格式: "=>" 行是本机, "<= " 行(第2行) 才是对端IP;
+# 数值列顺序: last2s last10s last40s cumulative
 get_traffic() {
     local seconds="$1"
     iftop -n -t -B -s "$seconds" -L 500 2>/dev/null \
-        | awk -v thr="$MIN_KB" -v localip="$LOCAL_IPS" '
-            /=>/ {
-                # 提取行首IP
-                if (match($0, /^[ \t]*[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/)) {
+        | awk -v localip="$LOCAL_IPS" '
+            /<=/ {
+                if (match($0, /[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/)) {
                     host=substr($0, RSTART, RLENGTH);
-                    sub(/^[ \t]*/, "", host);      # 去掉前导空白
                     if (host == localip) next;      # 跳过本机
 
-                    # 提取全部字节数值 (iftop -B 单位为字节)
-                    speed=0; total=0; cnt=0; buf=$0; have=0;
-                    while (match(buf, /[0-9]+\.[0-9]+[kKmMgGgBbB]?/)) {
+                    # 去掉IP部分再提取数值, 避免IPv4数字干扰
+                    ns=$0;
+                    gsub(/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/, "", ns);
+
+                    # 数值列: 第1个=last2s速率(字节), 第4个=cumulative
+                    speed=0; total=0; cnt=0; buf=ns;
+                    while (match(buf, /[0-9]+(\.[0-9]+)?[kKmMgGgBbB]?/)) {
                         v=substr(buf, RSTART, RLENGTH);
                         buf=substr(buf, RSTART+RLENGTH);
                         num=v+0;
@@ -165,12 +167,11 @@ get_traffic() {
                         if (u=="k") num*=1024;
                         else if (u=="m") num*=1048576;
                         else if (u=="g") num*=1073741824;
-                        # iftop -B 方向行数值顺序: 总发送 总接收 last2s发送 last2s接收 peak...
-                        if (cnt==0 || cnt==1) total+=num;
-                        else if (cnt==2 || cnt==3) speed+=num;
-                        cnt++; have=1;
+                        if (cnt==0) speed=num;       # last2s
+                        if (cnt==3) total=num;       # cumulative
+                        cnt++;
                     }
-                    if (have && speed >= thr*1024) printf "%s %.1f %.1f\n", host, speed/1024, total/1048576;
+                    if (cnt>=4) printf "%s %.2f %.2f\n", host, speed/1024, total/1024;
                 }
             }'
 }
@@ -256,8 +257,8 @@ fi
 
 # 归属地查询与展示
 if [ "$HAVE_TRAFFIC" = "1" ]; then
-    echo -e "${CYAN}${BOLD}--- 有网速的IP (>=${MIN_KB}KB/s, TOP ${TOP}) ---${RESET}"
-    printf "  %-18s %-9s %-10s %-5s %-30s %s\n" "IP" "速率(KB/s)" "累计(MB)" "连接" "归属地/组织" "状态"
+    echo -e "${CYAN}${BOLD}--- IP 网速 (TOP ${TOP}) ---${RESET}"
+    printf "  %-18s %-9s %-10s %-5s %-30s %s\n" "IP" "速率(KB/s)" "累计(KB)" "连接" "归属地/组织" "状态"
 else
     echo -e "${CYAN}${BOLD}--- 连接 TOP ${TOP} ---${RESET}"
     printf "  %-18s %-6s %-30s %s\n" "IP" "连接数" "归属地/组织" "状态"
@@ -267,13 +268,6 @@ echo "  ------------------------------------------------------------------"
 # 展示
 shown=0
 while read -r ip cnt; do
-    # 网速过滤: 只显示有网速的IP
-    if [ "$HAVE_TRAFFIC" = "1" ]; then
-        sp=${TRAFFIC_SPEED[$ip]:-0}
-        if ! awk "BEGIN{exit !($sp >= $MIN_KB)}"; then
-            continue
-        fi
-    fi
     shown=$((shown+1))
     [ "$shown" -gt "$TOP" ] && break
     states=$(awk -F'|' -v ip="$ip" '$1==ip{print $2}' "$TMP" | sort -u | tr '\n' ',')
@@ -282,14 +276,14 @@ while read -r ip cnt; do
     if [ "$HAVE_TRAFFIC" = "1" ]; then
         sp=${TRAFFIC_SPEED[$ip]:-0}
         tot=${TRAFFIC_TOTAL[$ip]:-0}
-        printf "  %-18s %-9.1f %-10.1f %-5s %-30s %s\n" "$ip" "$sp" "$tot" "$cnt" "$geo" "$states"
+        printf "  %-18s %-9.2f %-10.2f %-5s %-30s %s\n" "$ip" "$sp" "$tot" "$cnt" "$geo" "$states"
     else
         printf "  %-18s %-6s %-30s %s\n" "$ip" "$cnt" "$geo" "$states"
     fi
 done < "${TMP}.agg"
 
 if [ "$shown" -eq 0 ]; then
-    echo -e "${YELLOW}  (网速达到 ${MIN_KB}KB/s 的IP没有, 可调低 -k 或用 -a 显示全部)${RESET}"
+    echo -e "${YELLOW}  (无符合条件的IP, 可用 -a 显示全部)${RESET}"
 fi
 
 rm -f "$TMP" "${TMP}.agg"
