@@ -165,11 +165,12 @@ get_traffic() {
                         if (u=="k") num*=1024;
                         else if (u=="m") num*=1048576;
                         else if (u=="g") num*=1073741824;
-                        if (cnt<2) speed+=num;       # 前两个=last2s 收发
-                        else total+=num;             # 后两个=累计 收发
+                        # iftop -B 方向行数值顺序: 总发送 总接收 last2s发送 last2s接收 peak...
+                        if (cnt==0 || cnt==1) total+=num;
+                        else if (cnt==2 || cnt==3) speed+=num;
                         cnt++; have=1;
                     }
-                    if (have) printf "%s %.1f %.1f\n", host, speed/1024, total/1048576;
+                    if (have && speed >= thr*1024) printf "%s %.1f %.1f\n", host, speed/1024, total/1048576;
                 }
             }'
 }
