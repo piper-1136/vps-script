@@ -140,38 +140,38 @@ get_pid_connections() {
 }
 
 # ---------- iftop 采样, 得到有流量的IP (KB) ----------
-# 返回每行: peerIp|KB (仅保留累计流量 >= MIN_KB 的IP, 同时避免本机IP)
-# iftop -t 文本格式: host行(含对端IP和右侧累计值) 与 "=> 本机" 方向行交替
+# 返回每行: peerIp|速率KB/s|累计MB
+# iftop -B 以字节显示; -t 文本模式
+# host行格式: "对端IP            => 总发送 总接收  last2s发送 last2s接收"
+# 对端IP出现在 "=>" 行的第1列 (常见 iftop 版本)
 get_traffic() {
     local seconds="$1"
-    iftop -n -t -s "$seconds" -L 500 2>/dev/null \
-        | grep -vE '=>|<=|<=' \
-        | awk -v thr="$MIN_KB" -v localip="$LOCAL_IPS" '{
-            # 只处理含对端IP的host行
-            if (match($0, /[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/)) {
-                host=substr($0, RSTART, RLENGTH);
-                # 跳过本机IP(避免把本机当对端)
-                if (host == localip) next;
+    iftop -n -t -B -s "$seconds" -L 500 2>/dev/null \
+        | awk -v thr="$MIN_KB" -v localip="$LOCAL_IPS" '
+            /=>/ {
+                # 提取行首IP
+                if (match($0, /^[ \t]*[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/)) {
+                    host=substr($0, RSTART, RLENGTH);
+                    sub(/^[ \t]*/, "", host);      # 去掉前导空白
+                    if (host == localip) next;      # 跳过本机
 
-                # 抽取全部带单位数值: 第1个=last2s速率, 最后一个=累计总量
-                # 单位: B=字节, KB, MB, GB; 统一折算为KB
-                speed=0; total=0; cnt=0; buf=$0;
-                while (match(buf, /[0-9.]+[kKmMgGgBbB]/)) {
-                    v=substr(buf, RSTART, RLENGTH);
-                    buf=substr(buf, RSTART+RLENGTH);
-                    num=v+0; uc=tolower(substr(v, length(v), 1));
-                    if      (uc=="g") num*=1048576;
-                    else if (uc=="m") num*=1024;
-                    else if (uc=="b") num/=1024;
-                    if (cnt==0) speed=num;   # 第一个=实时速率(last2s)
-                    total=num;                # 最后一个=累计
-                    cnt++;
+                    # 提取全部字节数值 (iftop -B 单位为字节)
+                    speed=0; total=0; cnt=0; buf=$0; have=0;
+                    while (match(buf, /[0-9]+\.[0-9]+[kKmMgGgBbB]?/)) {
+                        v=substr(buf, RSTART, RLENGTH);
+                        buf=substr(buf, RSTART+RLENGTH);
+                        num=v+0;
+                        u=tolower(substr(v, length(v), 1));
+                        if (u=="k") num*=1024;
+                        else if (u=="m") num*=1048576;
+                        else if (u=="g") num*=1073741824;
+                        if (cnt<2) speed+=num;       # 前两个=last2s 收发
+                        else total+=num;             # 后两个=累计 收发
+                        cnt++; have=1;
+                    }
+                    if (have) printf "%s %.1f %.1f\n", host, speed/1024, total/1048576;
                 }
-
-                # 用实时速率(speed)过滤: 只显示有速率(>=MIN_KB KB/s)的IP
-                if (speed >= thr) printf "%s %.1f %.1f\n", host, speed, total;
-            }
-        }'
+            }'
 }
 
 # ============================================================
@@ -281,8 +281,7 @@ while read -r ip cnt; do
     if [ "$HAVE_TRAFFIC" = "1" ]; then
         sp=${TRAFFIC_SPEED[$ip]:-0}
         tot=${TRAFFIC_TOTAL[$ip]:-0}
-        totmb=$(awk "BEGIN{printf \"%.1f\", $tot/1024}")
-        printf "  %-18s %-9.1f %-10s %-5s %-30s %s\n" "$ip" "$sp" "$totmb" "$cnt" "$geo" "$states"
+        printf "  %-18s %-9.1f %-10.1f %-5s %-30s %s\n" "$ip" "$sp" "$tot" "$cnt" "$geo" "$states"
     else
         printf "  %-18s %-6s %-30s %s\n" "$ip" "$cnt" "$geo" "$states"
     fi
