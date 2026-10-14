@@ -217,14 +217,6 @@ if [ -z "$PIDS" ]; then
     exit 1
 fi
 
-echo -e "${CYAN}${BOLD}== $PROC_NAME 进程 (PID: $PIDS) ==${RESET}"
-for p in $PIDS; do
-    cmd="?"
-    [ -r "/proc/$p/cmdline" ] && cmd=$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null)
-    echo -e "  PID $p: ${YELLOW}${cmd:-?}${RESET}"
-done
-echo
-
 # 汇总每个 PID 的连接: 收集 peerIp -> (状态,出现次数)
 TMP=$(mktemp)
 for p in $PIDS; do
@@ -238,17 +230,15 @@ if [ ! -s "$TMP" ]; then
 fi
 
 # 聚合: 每 IP 连接数
-echo -e "${GREEN}${BOLD}--- $PROC_NAME 的连接 (按IP聚合) ---${RESET}"
 awk -F'|' '{ counts[$1]++ } END { for (ip in counts) print ip, counts[ip] }' "$TMP" \
     | sort -k2 -rn > "${TMP}.agg"
-echo -e "  共 $(wc -l < "${TMP}.agg") 个远端IP, $(wc -l < "$TMP") 条连接"
-echo
 
 # 采集流量 (可选, 需 iftop)
 declare -A TRAFFIC_SPEED
 declare -A TRAFFIC_TOTAL
 HAVE_TRAFFIC=0
-if [ "$WITH_TRAFFIC" = "1" ] && command -v iftop >/dev/null 2>&1 && [ "$(id -u)" = "0" ]; then
+if [ "$WITH_TRAFFIC" = "1" ] && command -v iftop >/dev/null 2>&1; then
+    [ "$(id -u)" != "0" ] && echo -e "${YELLOW}非root运行, iftop 采集可能受限, 建议 sudo $0${RESET}"
     echo -e "${CYAN}正在用 iftop 采样 ${SAMPLESEC} 秒, 识别有网速的IP (>=${MIN_KB}KB/s)...${RESET}"
     get_traffic "$SAMPLESEC" > "${TMP}.traf"
     if [ -s "${TMP}.traf" ]; then
@@ -260,7 +250,7 @@ if [ "$WITH_TRAFFIC" = "1" ] && command -v iftop >/dev/null 2>&1 && [ "$(id -u)"
     fi
     rm -f "${TMP}.traf"
 elif [ "$WITH_TRAFFIC" = "1" ]; then
-    echo -e "${YELLOW}未安装 iftop 或非root, 跳过网速统计, 显示全部连接${RESET}"
+    echo -e "${YELLOW}未安装 iftop, 无法显示每IP网速. 安装: apt install iftop 或 yum install iftop${RESET}"
 fi
 
 # 归属地查询与展示
